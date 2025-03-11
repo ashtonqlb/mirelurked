@@ -1,0 +1,21 @@
+downloaders:
+  downloads_directory: null
+  nexus:
+    api_key: null
+installation:
+  wabbajack_file_path: null
+  installation_path: null
+games:
+  FalloutNewVegas:
+    root_directory: $FNVROOT
+  Fallout3:
+    root_directory: $FO3ROOT
+fixup:
+  game_resolution: 1280x800 # If your device supports a different resolution, make sure to change this!
+
+extras:
+  tale_of_two_wastelands:
+    path_to_ttw_mpi_file: "./ttw.mpi"
+    variables:
+      USERPROFILE: "$FNVCONFIGDIR"
+      DESTINATION: "./out"
