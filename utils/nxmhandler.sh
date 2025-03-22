@@ -14,7 +14,7 @@ fi
 instance_dir="$HOME/MLMO2"
 
 instance_dir_windowspath="Z:$(sed 's/\//\\\\/g' <<<"$instance_dir")"
-pgrep -f "$instance_dir_windowspath\\\\modorganizer2\\\\ModOrganizer.exe"
+pgrep -f "$instance_dir_windowspath\\\\ModOrganizer.exe"
 process_search_status=$?
 
 game_appid=$(cat "$instance_dir/appid.txt")

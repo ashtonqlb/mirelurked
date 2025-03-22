@@ -66,4 +66,18 @@ function appId {
   printf "%s" $app_id
 }
 
+function longAppID {
+    # Convert a short AppID (32-bit) to a long AppID (64-bit) used by Steam shortcuts
+  if [ $# -eq 0 ]; then
+      echo "Usage: $0 <short_appid>"
+      exit 1
+  fi
+
+  short_appid="$1"
+
+  # Use printf to handle 64-bit unsigned integer
+  printf "%u\n" $(( ( short_appid << 32 ) | 0x02000000 ))
+}
+
 export -f appId
+export -f longAppID

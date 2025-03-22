@@ -3,6 +3,7 @@
 # Functionality switches
 isTTW=0
 MO2APPID=0
+MLMO2LAID=0
 STEAMLIBRARYDIR=""
 
 # Script constants
@@ -11,14 +12,12 @@ readonly STEAMGAMEDIR=$STEAMAPPSDIR/common
 readonly STEAMPREFIXDIR=$STEAMAPPSDIR/compatdata
 readonly UTILDIR=./utils
 readonly STL=$UTILDIR/steamtinkerlaunch
-readonly ASSETDIR=./assets
 readonly FNVAPPID=22380
 # shellcheck disable=SC2034
 readonly FNVCONFIGDIR=$STEAMPREFIXDIR/$FNVAPPID/pfx/drive_c/users/steamuser/Documents/My\ Games/FalloutNV
 readonly FNVEXEPATH=$STEAMGAMEDIR/Fallout\ New\ Vegas/FalloutNV.exe
 readonly FO3APPID=22370
 # TODO Determine these ad-hoc
-readonly MLMO2GAMEID=17784172602999177216
 # shellcheck disable=SC2034
 readonly FNVROOT=$STEAMGAMEDIR/Fallout\ New\ Vegas
 # shellcheck disable=SC2034
@@ -211,7 +210,10 @@ install_mo2() {
 
     local GAME_NAME="ModdingLinked MO2"
     local EXE_PATH="$HOME/MLMO2/ModOrganizer.exe"
-    local ICON_PATH="$ASSETDIR/icon.png"
+    local ICON_PATH="$UTILDIR/assets/icon.png"
+    local HERO_PATH="$UTILDIR/assets/hero.png"
+    local BOXART_PATH="$UTILDIR/assets/boxart.png"
+    local TENFOOT_PATH="$UTILDIR/assets/boxart.png"
     local START_DIR
     START_DIR=$(dirname "$EXE_PATH")
 
@@ -224,20 +226,21 @@ install_mo2() {
     -hd=0 \
     -adc=1 \
     -ao=1 \
-    -ct="proton_9"
-  # -hr=|--hero=                     Hero Art path    - Banner used on the Game Screen (3840x1240 recommended) - optional
-  # -lg=|--logo=                     Logo Art path    - Logo that gets displayed on Game Screen (16:9 recommended) - optional   
-  # -ba=|--boxart=                   Box Art path     - Cover art used in the library (600x900 recommended) - optional
-  # -tf=|--tenfoot=                  Tenfoot Art path - Small banner used for recently played game in library (600x350 recommended) - optional
+    -ct="proton_9" \
+    -hr="\"$HERO_PATH\"" \
+    -ba="\"$BOXART_PATH\"" \
+    -tf="\"$TENFOOT_PATH\"" \
 
-    # Create prefix
-    xdg-open steam://nav/games/list
 
     #TODO: If we can calculate GameIDs this section might be redundant.
     zenity --info --text="To Finish MO2 installation, you must run it once. To do so:\n\n1. Wait for Steam to automatically open.\n\n2. Search for <b>$GAME_NAME</b> in Steam and launch it.\n\n3. When it launches, close it when the first window appears.\n\n4. Click the button at the bottom of this dialogue box to confirm" --title="Installing $GAME_NAME" --width 500 --ok-label="I have completed these steps"
-
-    #Automatically determine MO2 AppID
+    
+    # Automatically determine MO2 AppIDs (compatdata path & shortcut)
     MO2APPID=$(appId "$GAME_NAME" "ModOrganizer.exe")
+    MO2LAID=$(longAppID "$MO2APPID")
+
+    # Create prefix
+    xdg-open steam://rungameid/"$MO2LAID"
 
     # Export MO2APPID to file. We will use this later!
     cat "$MO2APPID" < "$HOME/MLMO2/appid.txt"
@@ -351,8 +354,6 @@ generate_hoolamike_config() {
     done < "$UTILDIR/template.yaml" > "$UTILDIR/hoolamike/hoolamike.yaml"
 }
 
-generate_hoolamike_config
-
 # Execute Hoolamike with the generated config, output results in utildir
 install_ttw() {
     zenity --info --title "Installing TTW" --text="Tale of Two Wastelands will now be installed. This process will take a <i>long</i> time.\n\nClose any other running programs and make sure your device stays on and connected to power during the installation process." --width=500
@@ -378,6 +379,8 @@ finish() {
         xdg-open https://vivanewvegas.moddinglinked.com/utilities.html#Decompressor
     fi
 }
+
+tester
 
 # Main script execution
 
