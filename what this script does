@@ -1,0 +1,13 @@
+1 - clean install the games
+2 - download MLMO2 to /home
+3 - download xNVSE
+4 - extract xNVSE to the game folder
+5 - add MLMO2 to Steam as a non-Steam game
+6 - create prefix for MLMO2
+7 - use Protontricks to install dependencies onto MLMO2 prefix
+8 - launch MLMO2 from Steam
+9 - guide user through first time setup of MLMO2
+10 - download VNV/TBOT mods automatically using hoolamike
+11 - if TTW install TTW with Hoolamike
+12 - if not 4GB patch New Vegas with Hoolamike
+13 - done

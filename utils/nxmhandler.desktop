@@ -1,0 +1,10 @@
+[Desktop Entry]
+Categories=Game;Utility
+Exec=bash -c '"\$HOME/MLMO2/nxmhandler.sh" "\$@"' '\$HOME/MLMO2/nxmhandler.sh' %u
+MimeType=x-scheme-handler/modl; x-scheme-handler/nxm
+Name=ModdingLinked Mod Organizer 2 NXM/MODL Handler
+NoDisplay=true
+StartupNotify=false
+Terminal=false
+Type=Application
+X-KDE-SubstituteUID=false

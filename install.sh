@@ -1,8 +1,12 @@
 #!/bin/bash
 
+# Functionality switches
+isTTW=0
+MO2APPID=0
+STEAMLIBRARYDIR=""
+
 # Script constants
-readonly STEAMAPPSDIR=$HOME/.steam/steam/steamapps
-# TODO: Add Steam Library detection rather than assuming install on root drive
+readonly STEAMAPPSDIR=$STEAMLIBRARYDIR/steamapps
 readonly STEAMGAMEDIR=$STEAMAPPSDIR/common
 readonly STEAMPREFIXDIR=$STEAMAPPSDIR/compatdata
 readonly UTILDIR=./utils
@@ -15,16 +19,53 @@ readonly FNVEXEPATH=$STEAMGAMEDIR/Fallout\ New\ Vegas/FalloutNV.exe
 readonly FO3APPID=22370
 # TODO Determine these ad-hoc
 readonly MLMO2GAMEID=17784172602999177216
-readonly MO2APPID=4140700354
 # shellcheck disable=SC2034
 readonly FNVROOT=$STEAMGAMEDIR/Fallout\ New\ Vegas
 # shellcheck disable=SC2034
 readonly FO3ROOT=$STEAMGAMEDIR/Fallout\ 3\ goty
 
-# Functionality switches
-isTTW=0
+# Install SteamTinkerLaunch and add it to PATH
+install_stl() {
+    git clone https://github.com/sonic2kk/steamtinkerlaunch "$HOME"
+
+    # Move STL to hidden directory to prevent hapless users from deleting it
+    mv "$HOME"/steamtinkerlaunch "$HOME"/.steamtinkerlaunch 
+    chmod +x "$HOME"/.steamtinkerlaunch/steamtinkerlaunch
+
+    # Add STL to PATH
+    {
+        echo "# Steam Tinker Launch"
+        echo "export STL_INSTALL=$HOME/.steamtinkerlaunch"
+        echo "export PATH=$STL_INSTALL:$PATH"
+    } >> "$HOME/.bash_profile"
+
+    # Reload bash_profile
+    # shellcheck disable=SC1091
+    . "$HOME/.bash_profile"
+
+    # Add STL to Steam
+    steamtinkerlaunch compat add
+}
 
 start() {
+    # Function to check and set sudo password
+    check_sudo_password() {
+        if  pgrep -s 0 '^sudo$' > /dev/null; then
+            echo "Please set a password for your account now."
+            until sudo passwd "$(whoami)"; do
+                echo "Password setup failed. Please try again."
+                sleep 1
+            done
+            echo "Sudo password set successfully."
+        else
+            echo "Sudo password already set. Good job!"
+        fi
+    }
+
+    if ! command -v steamtinkerlaunch > /dev/null 2>&1; then
+        install_stl
+    fi
+
     if zenity --question --text="Please choose the option for the ModdingLinked guide you intend to follow" --ok-label="Viva New Vegas" --cancel-label="The Best of Times"; then
         isTTW=0  # "Viva New Vegas" clicked
     else
@@ -32,24 +73,48 @@ start() {
     fi
 }
 
-# Function to check and set sudo password
-check_sudo_password() {
-    if  pgrep -s 0 '^sudo$' > /dev/null; then
-        echo "Please set a password for your account now."
-        until sudo passwd "$(whoami)"; do
-            echo "Password setup failed. Please try again."
-            sleep 1
-        done
-        echo "Sudo password set successfully."
+select_steam_library() {
+    local vdf_file="$HOME/.local/share/Steam/steamapps/libraryfolders.vdf}"
+    
+    # Verify VDF file exists
+    if [[ ! -f "$vdf_file" ]]; then
+        zenity --error --text="Could not find libraryfolders.vdf" --title="File Error"
+        return 1
+    fi
+
+    # Extract library paths using proper VDF parsing
+    readarray -t steam_paths < <(
+        awk -F '"' '/"path"/ {print $4}' "$vdf_file" | 
+        grep -v '^$'
+    )
+
+    # Verify we found paths
+    if [[ ${#steam_paths[@]} -eq 0 ]]; then
+        zenity --error --text="No Steam library paths found" --title="Parse Error"
+        return 1
+    fi
+
+    # Present Zenity selection dialog
+    selected_path=$(zenity --list \
+        --title="Select Steam Library" \
+        --text="Choose your Steam library folder:" \
+        --column="Available Libraries" "${steam_paths[@]}")
+
+    # Set environment variable if selection made
+    if [[ -n "$selected_path" ]]; then
+        export STEAMLIBRARYDIR="$selected_path"
+        zenity --info --text="Steam library set to:\n$STEAMLIBRARYDIR" --title="Selection Confirmed"
+        return 0
     else
-        echo "Sudo password already set. Good job!"
+        zenity --warning --text="No library selected" --title="Selection Cancelled"
+        return 1
     fi
 }
 
 # Download the latest Protontricks, Hoolamike, ModdingLinked MO2 & xNVSE, put them all into the utildir
 download_dependencies() {
     # Install Protontricks if it hasn't been already
-    flatpak install --user flathub com.github.Matoking.protontricks
+    flatpak update && flatpak install -y --user flathub com.github.Matoking.protontricks
     
     # Download Hoolamike
     hoolamike_url=$(curl -s https://api.github.com/repos/Niedzwiedzw/hoolamike/releases/latest \
@@ -90,10 +155,6 @@ download_dependencies() {
     # Extract MLMO2 into a named folder
     7z x -y "$UTILDIR/$mo2_file" -o"$UTILDIR/MLMO2" >/dev/null
     kill $zen_pid
-
-    #Clone latest SteamTinkerLaunch
-    git clone https://github.com/sonic2kk/steamtinkerlaunch $UTILDIR/steamtinkerlaunch
-    chmod +x $UTILDIR/steamtinkerlaunch/steamtinkerlaunch
 }
 
 # Delete previous Fallout: New Vegas & Fallout 3 installations, delete their Steam installation records & reinstall
@@ -124,24 +185,40 @@ install_xnvse() {
 }
 
 install_mo2() {
+    zenity --progress \
+  --title="Installing MO2" \
+  --text="Checking for existing installation" \
+  --percentage=0
+
     #Remove MLMO2 if already added
     xdg-open steam://uninstall/"$MLMO2GAMEID"
 
     steam -shutdown && sleep 3s &
 
+    zenity --progress \
+    --title="Installing MO2" \
+    --text="Copying MLMO2 to /home" \
+    --percentage=30
+
     # Copy MO2 to user's /home directory
     rsync -Xav --progress $UTILDIR/MLMO2 "${HOME:?}"
 
-    GAME_NAME="ModdingLinked MO2"
-    EXE_PATH="$HOME/MLMO2/ModOrganizer.exe"
-    ICON_PATH="$ASSETDIR/icon.png"
+
+    zenity --progress \
+    --title="Installing MO2" \
+    --text="Adding MLMO2 to Steam" \
+    --percentage=30
+
+    local GAME_NAME="ModdingLinked MO2"
+    local EXE_PATH="$HOME/MLMO2/ModOrganizer.exe"
+    local ICON_PATH="$ASSETDIR/icon.png"
+    local START_DIR
     START_DIR=$(dirname "$EXE_PATH")
 
     # Add MLMO2 to Steam
-
     $STL/steamtinkerlaunch addnonsteamgame \
     -an="$GAME_NAME" \
-    -ep="/home/ky/MLMO2/ModOrganizer.exe" \
+    -ep="$HOME/MLMO2/ModOrganizer.exe" \
     -sd="\"$START_DIR\"" \
     -ip="\"$ICON_PATH\"" \
     -hd=0 \
@@ -156,118 +233,136 @@ install_mo2() {
     # Create prefix
     xdg-open steam://nav/games/list
 
+    #TODO: If we can calculate GameIDs this section might be redundant.
     zenity --info --text="To Finish MO2 installation, you must run it once. To do so:\n\n1. Wait for Steam to automatically open.\n\n2. Search for <b>$GAME_NAME</b> in Steam and launch it.\n\n3. When it launches, close it when the first window appears.\n\n4. Click the button at the bottom of this dialogue box to confirm" --title="Installing $GAME_NAME" --width 500 --ok-label="I have completed these steps"
 
-    #TODO: Automatically determine MO2 GameID & AppID
-    # export MO2APPID
-    # MO2APPID=$($STL/steamtinkerlaunch gi "$GAME_NAME" | grep -Eo "[0-9]+") # heh
-    # echo $MO2APPID
+    #Automatically determine MO2 AppID
+    MO2APPID=$(appId "$GAME_NAME" "ModOrganizer.exe")
+
+    # Export MO2APPID to file. We will use this later!
+    cat "$MO2APPID" < "$HOME/MLMO2/appid.txt"
 
     # Add a G:/ drive to MO2 proton prefix that expands to steamapps/common.
-    rm -f "$STEAMPREFIXDIR/$MO2APPID/pfx/dosdevices/g:" 2> /dev/null
-    ln -s "$STEAMGAMEDIR" "$STEAMPREFIXDIR/$MO2APPID/pfx/dosdevices/g:"
+    # rm -f "$STEAMPREFIXDIR/$MO2APPID/pfx/dosdevices/g:" 2> /dev/null
+    # ln -s "$STEAMGAMEDIR" "$STEAMPREFIXDIR/$MO2APPID/pfx/dosdevices/g:"
 
     # Create mod link handlers
-    touch "${HOME:?}"/MLMO2/nxmhandler.sh \
-          "${HOME:?}"/MLMO2/nxmhamdler.desktop \
-          "${HOME:?}"/MLMO2/modlhandler.desktop \
-    # Write out NXM Handler
-cat <<EOF > "$HOME/MLMO2/nxmhandler.sh"
-    #!/bin/bash
+    rsync -Xav --progress $UTILDIR/nxmhandler.sh "${HOME:?}"/MLMO2
+    chmod +x "${HOME:?}"/MLMO2/nxmhandler.sh
+    rsync -Xav --progress $UTILDIR/nxmhandler.desktop "${HOME:?}"/MLMO2
 
-    # This script is used to send downloads from the Nexus Mods website to Mod Organizer 2.
-
-    nxm_link="\$1"
-    shift
-
-    # Check if an NXM link was provided.
-    if [ -z "\$nxm_link" ]; then
-        echo "ERROR: Please specify an NXM link to download." >&2
-        # Exit with an error status.
-        exit 1
-    fi
-
-    # Set MO2 directory.
-    mo2_dir="\$HOME/MLMO2"
-
-    # Set MO2 Steam AppID.
-    game_appid="4140700354" # Replace this with \$MO2APPID
-
-    # Send the download to the running Mod Organizer 2 instance.
-    download_start=\$(WINEESYNC=1 WINEFSYNC=1 protontricks-launch --appid "\$game_appid" "\$mo2_dir/nxmhandler.exe" "\$nxm_link")
-EOF
-    chmod +x "$HOME/MLMO2/nxmhandler.sh"
-
-    # Write out NXM handler.desktop
-cat <<EOF > "$HOME/MLMO2/nxmhandler.desktop"
-    [Desktop Entry]
-    Categories=Game
-    Exec=bash -c '"\$HOME/MLMO2/nxmhandler.sh" "\$@"' '\$HOME/MLMO2/nxmhandler.sh' %u
-    MimeType=x-scheme-handler/nxm
-    Name=ModdingLinked Mod Organizer 2 NXM Handler
-    NoDisplay=true
-    StartupNotify=false
-    Terminal=false
-    Type=Application
-    X-KDE-SubstituteUID=false
-EOF
-
-    # Write out MODL handler.desktop
-cat <<EOF > "$HOME/MLMO2/modlhandler.desktop"
-    [Desktop Entry]
-    Categories=Game
-    Exec=bash -c '"\$HOME/MLMO2/nxmhandler.sh" "\$@"' '\$HOME/MLMO2/nxmhandler.sh' %u
-    MimeType=x-scheme-handler/modl
-    Name=ModdingLinked Mod Organizer 2 MODL Handler
-    NoDisplay=true
-    StartupNotify=false
-    Terminal=false
-    Type=Application
-    X-KDE-SubstituteUID=false
-EOF
     # Register new apps
     update-desktop-database
 
-    # Install dependencies to MLMO2 Prefix with Protontricks
-    flatpak run com.github.Matoking.protontricks --no-bwrap $MO2APPID -q xact xact_x64 d3dcompiler_47 d3dx11_43 d3dcompiler_43 vcrun2022 fontsmooth=rgb
+    # Install dependencies to MLMO2 prefix with Protontricks
+    flatpak run com.github.Matoking.protontricks --no-bwrap "$MO2APPID" -q xact xact_x64 d3dcompiler_47 d3dx11_43 d3dcompiler_43 vcrun2022 fontsmooth=rgb
 }
 
 download_prompt_ttw() {
     # Show a Zenity dialog box with a message and a button
-    xdg-open "https://mod.pub/ttw/133/files" && zenity --info --text="There is no way to download Tale of Two Wastelands automatically, so you must do so manually\n\nTo do so, read the following instructions carefully:\n\n1. Click 'Manual Download'. You may need to create an account or sign in.\n\n2. Save the file to your Downloads folder.\n\n3. Click the button on the bottom of this dialog box." --title="Download TTW" --width 500 --ok-label="I have read the instructions"
+    xdg-open "https://mod.pub/ttw/133/files" && zenity --info --text="There is no way to download Tale of Two Wastelands automatically, so you must do so manually\n\nTo do so, read the following instructions carefully:\n\n1. Click <b>Manual Download.</b> You may need to create an account or sign in.\n\n2. Save the file to your <b>Downloads</b> folder.\n\n3. Click the button on the bottom of this dialog box." --title="Download TTW" --width 500 --ok-label="I have read the instructions"
+    
+    local file="Tale\ of\ Two\ Wastelands.*\.7z"
 
-    # TODO: Need to do this without inotifywait
-    # Wait for the file download to appear
-    inotifywait -m -e create --format '%f' ~/Downloads | while read -r filename; do
-        if [[ "$filename" =~ Tale\ of\ Two\ Wastelands.*\.7z ]]; then
-            # Extract the .7z file
-            7z x -y "$HOME/Downloads/$filename" -o"$UTILDIR/TTW" >/dev/null
+    # Phase 1: Wait for the file to exist
+    while [[ ! -f "$file" ]]; do
+        sleep 1
+    done
 
-            # Move the extracted .mpi file
-            mv $UTILDIR/Tale\ of\ Two\ Wastelands*.mpi $UTILDIR/hoolamike/ttw.mpi
-            # Delete the junk folder
-            rm -rf $UTILDIR/TTW
+    # Phase 2: Wait for the file to contain data
+    while [[ ! -s "$file" ]]; do
+        sleep 1
+    done
+
+    # Phase 3: Wait for file size stabilization
+    local previous_size current_size
+    previous_size=$(stat -c %s "$file")
+
+    while true; do
+        sleep 5
+        current_size=$(stat -c %s "$file")
+        if [[ "$current_size" -eq "$previous_size" ]]; then
             break
         fi
+        previous_size="$current_size"
     done
+
+    # Extract the .7z file
+    7z x -y "$HOME/Downloads/$file" -o"$UTILDIR/TTW" >/dev/null
+
+    # Move the extracted .mpi file
+    mv $UTILDIR/Tale\ of\ Two\ Wastelands*.mpi $UTILDIR/hoolamike/ttw.mpi
+    # Delete the junk folder
+    rm -rf $UTILDIR/TTW
 }
 
-generate_hoolamike_config () {
-    mkdir $UTILDIR/hoolamike/out
+generate_hoolamike_config() {
+    mkdir -p "$UTILDIR/hoolamike/out"
 
+    # Get connected monitors
+    local monitors
+    mapfile -t monitors < <(xrandr --query | awk '/ connected/ {print $1}')
+
+    # Automatically select if only one monitor
+    local monitor
+    if [[ ${#monitors[@]} -eq 1 ]]; then
+        monitor="${monitors[0]}"
+    else
+        # Show Zenity selection dialog for multiple monitors
+        monitor=$(zenity --list \
+            --title="Monitor Selection" \
+            --text="Select your primary monitor:" \
+            --column="Available Monitors" "${monitors[@]}" \
+            --height=250 --width=300)
+        
+        # Exit if user cancelled
+        if [[ -z "$monitor" ]]; then
+            return 1
+        fi
+    fi
+
+    # Get current resolution for selected monitor
+    local current_res
+    current_res=$(xrandr --query | awk -v mon="$monitor" '
+        $1 == mon && $2 == "connected" {
+            while (getline) {
+                if ($0 !~ /^ /) break
+                for (i=2; i<=NF; i++) {
+                    if ($i ~ /\*/) {print $1; exit}
+                }
+            }
+        }'
+    )
+
+    # Handle resolution detection failure
+    if [[ -z "$current_res" ]]; then
+        zenity --error --text="Could not detect current resolution for $monitor" --width=300
+        return 1
+    fi
+
+    # Set detected resolution
+    # shellcheck disable=SC2034
+    RESOLUTION="$current_res"
+
+    # Generate config file with ShellCheck-compliant replacement
     while IFS= read -r line; do
-    # Safely expand variables without executing commands
-    parsed_line=$(echo "$line" | sed 's/"/\\"/g')
-    eval echo "\"$parsed_line\""
-    done < $UTILDIR/template.yaml > $UTILDIR/hoolamike/hoolamike.yaml
+        parsed_line="${line//\"/\\\"}"
+        eval echo "\"$parsed_line\""
+    done < "$UTILDIR/template.yaml" > "$UTILDIR/hoolamike/hoolamike.yaml"
 }
+
+generate_hoolamike_config
 
 # Execute Hoolamike with the generated config, output results in utildir
 install_ttw() {
+    zenity --info --title "Installing TTW" --text="Tale of Two Wastelands will now be installed. This process will take a <i>long</i> time.\n\nClose any other running programs and make sure your device stays on and connected to power during the installation process." --width=500
+
     $SHELL
     ulimit -n 64556
     $UTILDIR/hoolamike/hoolamike tale-of-two-wastelands
     $SHELL
+
+    #TODO: Move generated files into MLMO2 profile mods folder
 }
 
 4gb_patch() {
@@ -288,11 +383,13 @@ finish() {
 
 start
 check_sudo_password
+select_steam_library
 download_dependencies
 clean_install_titles
 generate_game_config
 install_xnvse
 install_mo2
+
 if [ $isTTW == 1 ]; then
     download_prompt_ttw
 fi
@@ -304,10 +401,9 @@ if [ $isTTW == 1 ]; then
 else
     4gb_patch
 fi
+
 finish
 
-Keep the session open
+# Keep the session open
 echo -e "\nPre-install completed. Press enter to exit."
 read -r
-
-#sneed :)
