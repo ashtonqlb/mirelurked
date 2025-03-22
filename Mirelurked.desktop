@@ -1,0 +1,17 @@
+[Desktop Entry]
+Comment[en_US]=
+Comment=
+Exec=sh -c 'curl -L https://raw.githubusercontent.com/ashtonqlb/mirelurked/refs/heads/main/install.sh | bash'
+GenericName[en_US]=
+GenericName=
+MimeType=
+Name=Mirelurked Guide Setup Utility
+Path=
+StartupNotify=false
+Terminal=true
+TerminalOptions=
+Type=Application
+X-DBUS-ServiceName=
+X-DBUS-StartupType=
+X-KDE-SubstituteUID=false
+X-KDE-Username=

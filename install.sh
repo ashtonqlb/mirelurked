@@ -3,7 +3,6 @@
 # Functionality switches
 isTTW=0
 MO2APPID=0
-MLMO2LAID=0
 STEAMLIBRARYDIR=""
 
 # Script constants
