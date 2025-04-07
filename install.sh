@@ -2,7 +2,6 @@
 
 # Functionality switches
 isTTW=0
-MO2APPID=0
 STEAMLIBRARYDIR=""
 
 # Script constants
@@ -16,7 +15,7 @@ readonly FNVAPPID=22380
 readonly FNVCONFIGDIR=$STEAMPREFIXDIR/$FNVAPPID/pfx/drive_c/users/steamuser/Documents/My\ Games/FalloutNV
 readonly FNVEXEPATH=$STEAMGAMEDIR/Fallout\ New\ Vegas/FalloutNV.exe
 readonly FO3APPID=22370
-# TODO Determine these ad-hoc
+
 # shellcheck disable=SC2034
 readonly FNVROOT=$STEAMGAMEDIR/Fallout\ New\ Vegas
 # shellcheck disable=SC2034
@@ -216,7 +215,7 @@ install_mo2() {
     local START_DIR
     START_DIR=$(dirname "$EXE_PATH")
 
-    # Add MLMO2 to Steam
+    # Add MLMO2 to Steam with Steam Tinker Launch
     $STL/steamtinkerlaunch addnonsteamgame \
     -an="$GAME_NAME" \
     -ep="$HOME/MLMO2/ModOrganizer.exe" \
@@ -229,6 +228,7 @@ install_mo2() {
     -hr="\"$HERO_PATH\"" \
     -ba="\"$BOXART_PATH\"" \
     -tf="\"$TENFOOT_PATH\"" \
+    -lo="STEAM_COMPAT_DATA_PATH=\"$HOME/.local/share/Steam/steamapps/compatdata/22380\" %command%"
 
 
     #TODO: If we can calculate GameIDs this section might be redundant.
@@ -244,11 +244,7 @@ install_mo2() {
     # Export MO2APPID to file. We will use this later!
     cat "$MO2APPID" < "$HOME/MLMO2/appid.txt"
 
-    # Add a G:/ drive to MO2 proton prefix that expands to steamapps/common.
-    # rm -f "$STEAMPREFIXDIR/$MO2APPID/pfx/dosdevices/g:" 2> /dev/null
-    # ln -s "$STEAMGAMEDIR" "$STEAMPREFIXDIR/$MO2APPID/pfx/dosdevices/g:"
-
-    # Create mod link handlers
+    # Create mod link handler
     rsync -Xav --progress $UTILDIR/nxmhandler.sh "${HOME:?}"/MLMO2
     chmod +x "${HOME:?}"/MLMO2/nxmhandler.sh
     rsync -Xav --progress $UTILDIR/nxmhandler.desktop "${HOME:?}"/MLMO2
@@ -257,7 +253,7 @@ install_mo2() {
     update-desktop-database
 
     # Install dependencies to MLMO2 prefix with Protontricks
-    flatpak run com.github.Matoking.protontricks --no-bwrap "$MO2APPID" -q xact xact_x64 d3dcompiler_47 d3dx11_43 d3dcompiler_43 vcrun2022 fontsmooth=rgb
+    flatpak run com.github.Matoking.protontricks --no-bwrap "$MO2APPID" -q - fontsmooth=rgb xact xact_x64 vcrun2022 dotnet6 dotnet7 dotnet8 d3dcompiler_47 d3dx11_43 d3dcompiler_43 d3dx9_43 d3dx9 vkd3d
 }
 
 download_prompt_ttw() {
@@ -362,7 +358,10 @@ install_ttw() {
     $UTILDIR/hoolamike/hoolamike tale-of-two-wastelands
     $SHELL
 
-    #TODO: Move generated files into MLMO2 profile mods folder
+    #Move generated files from $UTILDIR to MLMO2 profile mods folder
+    mkdir "$HOME/MLMO2/mods/Tale\ of\ Two\ Wastelands"
+    mv "$UTILDIR/hoolamike/out/*" "$HOME/MLMO2/mods/Tale\ of\ Two\ Wastelands"
+    rsync -Xav --progress  "$UTILDIR/meta.ini" "$HOME/MLMO2/mods/Tale\ of\ Two\ Wastelands/"
 }
 
 4gb_patch() {

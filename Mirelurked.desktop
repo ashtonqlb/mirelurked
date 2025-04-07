@@ -1,10 +1,14 @@
 [Desktop Entry]
-Comment[en_US]=
+Comment[en_GB]=
 Comment=
+Comment[en_US]=
 Exec=sh -c 'curl -L https://raw.githubusercontent.com/ashtonqlb/mirelurked/refs/heads/main/install.sh | bash'
-GenericName[en_US]=
+GenericName[en_GB]=
 GenericName=
+GenericName[en_US]=
+Icon=
 MimeType=
+Name[en_GB]=Mirelurked Guide Setup Utility
 Name=Mirelurked Guide Setup Utility
 Path=
 StartupNotify=false
